@@ -1,0 +1,15 @@
+{
+  "name": "article-to-flashcards-extension",
+  "version": "1.0.0",
+  "description": "Convert any webpage into flashcards automatically",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.4.5"
+  }
+}
