@@ -7,3 +7,5 @@ node_modules/
 .next
 dist
 build
+web-ui/node_modules/
+web-ui/tsconfig.tsbuildinfo
