@@ -1,428 +1,258 @@
-import type { Flashcard } from '../types'
+import type { Flashcard } from './types'
 
 // Wait for page to load
 function waitForContent(timeout = 10000): Promise<boolean> {
   return new Promise(resolve => {
-    const check = () => {
-      // Check if main content exists
-      const mainContent = document.querySelector('main, article, .article, .content, .post')
-      if (mainContent && mainContent.innerText.trim().length > 100) {
+    const startTime = Date.now()
+    const checkInterval = setInterval(() => {
+      const mainContent = document.querySelector('main, article, .content, .post, .article') as HTMLElement
+      if (mainContent && (mainContent.textContent?.trim().length ?? 0) > 100) {
+        clearInterval(checkInterval)
         resolve(true)
-      } else {
-        // Wait a bit more
-        setTimeout(check, 500)
-      }
-    }
-
-    // Check with timeout
-    let elapsed = 0
-    const interval = setInterval(() => {
-      elapsed += 500
-      if (elapsed >= timeout) {
-        clearInterval(interval)
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval)
         resolve(false)
       }
-      check()
     }, 500)
   })
 }
 
-// Extract article content using Readability logic
-function extractArticleContent(): {
-  title: string
-  content: string
-  url: string
-  author?: string
-  publishedDate?: string
-  keywords: string[]
-} {
-  // Try to find article metadata
-  const titleElement = document.querySelector('h1, .article-title, .post-title, h2')
-  const title = titleElement?.innerText.trim() || document.title
-
-  // Extract main content
-  const contentSelectors = [
-    'main',
-    'article',
-    '.article',
-    '.content',
-    '.post',
-    'div[class*="content"]',
-    'div[class*="article"]'
-  ]
-
-  let contentElement: HTMLElement | null = null
-  for (const selector of contentSelectors) {
-    contentElement = document.querySelector(selector)
-    if (contentElement) break
-  }
-
-  // Fallback: get first paragraph and headings
-  if (!contentElement) {
-    contentElement = document.body
-  }
-
-  // Clean up content
-  const paragraphs = contentElement.querySelectorAll('p, h2, h3, h4, li, dt, dd')
-  const text = Array.from(paragraphs)
-    .map(p => p.innerText.trim())
-    .filter(text => text.length > 0)
-    .join('\n\n')
-
-  // Get URL
-  const url = window.location.href
-
-  // Extract author and date from metadata
-  const author = document.querySelector('meta[name="author"]')?.content ||
-                 document.querySelector('.author')?.innerText?.trim()
-
-  const publishedDate = document.querySelector('meta[name="date"]')?.content ||
-                        document.querySelector('time[datetime]')?.getAttribute('datetime')
-
-  // Extract keywords
-  const keywords = Array.from(document.querySelectorAll('meta[name="keywords"], meta[name="tags"]'))
-    .map(m => m.content.split(',').map(k => k.trim()))
-    .flat()
-    .filter(k => k.length > 0)
-
-  return {
-    title,
-    content: text,
-    url,
-    author,
-    publishedDate,
-    keywords: keywords.length > 0 ? keywords : [title, 'article', 'webpage']
-  }
+// Extract page title
+function extractTitle(): string {
+  const titleElement = document.querySelector('h1, h2') as HTMLElement
+  return titleElement?.textContent?.trim() || document.title
 }
 
-// Generate flashcards from article content
-function generateFlashcards(article: any, apiKey: string): Promise<Flashcard[]> {
-  return new Promise((resolve, reject) => {
-    fetch('https://api.openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a flashcard generator. Generate 10 high-quality flashcards from the given article.
-Each flashcard should have:
-1. Question (clear and specific)
-2. Answer (concise but complete)
-3. Difficulty level (1-5: 1=Very Easy, 3=Medium, 5=Very Hard)
-4. Tags (relevant topics)
-Format as JSON array of objects with these fields:
-{
-  "question": "string",
-  "answer": "string",
-  "type": "qa",
-  "difficulty": 1-5,
-  "tags": ["string"]
+// Extract page content
+function extractContent(): string {
+  const mainContent = document.querySelector('main, article, .content, .post, .article') as HTMLElement
+  if (mainContent) {
+    // Get all paragraphs and headings
+    const paragraphs = Array.from(mainContent.querySelectorAll('p, h1, h2, h3, h4'))
+      .map(p => (p as HTMLElement).textContent?.trim())
+      .filter(Boolean)
+
+    return paragraphs.join('\n\n')
+  }
+  return ''
 }
 
-Only return the JSON array, nothing else.`
-          },
-          {
-            role: 'user',
-            content: `Article Title: ${article.title}\n\nArticle Content:\n${article.content.substring(0, 5000)}`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
-      })
-    })
-    .then(response => response.json())
-    .then(data => {
-      try {
-        const flashcards = JSON.parse(data.choices[0].message.content)
-        resolve(flashcards)
-      } catch (error) {
-        reject(new Error('Failed to parse flashcard data'))
+// Extract URL
+function extractUrl(): string {
+  return window.location.href
+}
+
+// Generate flashcards
+async function generateFlashcards(): Promise<Flashcard[]> {
+  try {
+    const content = extractContent()
+    if (!content) {
+      throw new Error('Could not extract content from page')
+    }
+
+    const title = extractTitle()
+    const url = extractUrl()
+
+    // This is a placeholder - replace with actual AI generation
+    const flashcards: Flashcard[] = [
+      {
+        id: Date.now().toString(),
+        question: `What is the main topic of "${title}"?`,
+        answer: 'Generated from page content',
+        type: 'qa',
+        difficulty: 2,
+        tags: ['Knowledge', 'Summary'],
+        sourceUrl: url,
+        sourceTitle: title,
+        createdAt: new Date().toISOString(),
+        schedule: {
+          nextReview: new Date(Date.now() + 86400000).toISOString(),
+          interval: 1,
+          repetition: 0,
+          easeFactor: 2.5
+        }
       }
-    })
-    .catch(reject)
-  })
+    ]
+
+    return flashcards
+  } catch (error) {
+    console.error('Error generating flashcards:', error)
+    throw error
+  }
 }
 
-// Show UI
-function showUI(flashcards: Flashcard[]) {
-  const existingUI = document.getElementById('flashcards-ui')
-  if (existingUI) {
-    existingUI.remove()
-  }
+// Create UI overlay
+function createOverlay(flashcards: Flashcard[]): void {
+  // Remove existing overlay
+  const existing = document.getElementById('flashcards-overlay')
+  if (existing) existing.remove()
 
-  const container = document.createElement('div')
-  container.id = 'flashcards-ui'
-  container.style.cssText = `
+  const overlay = document.createElement('div')
+  overlay.id = 'flashcards-overlay'
+  overlay.style.cssText = `
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    z-index: 2147483647;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 999999;
     display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    justify-content: center;
+    align-items: center;
   `
 
+  const container = document.createElement('div')
+  container.style.cssText = `
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+  `
+
+  // Header
   const header = document.createElement('div')
   header.style.cssText = `
-    padding: 16px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
     display: flex;
     justify-content: space-between;
     align-items: center;
-  `
-  header.innerHTML = `
-    <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📖 Generated Flashcards</h2>
-    <button id="close-ui" style="background: none; border: none; color: white; cursor: pointer; font-size: 24px; padding: 0; margin: 0;">×</button>
-  `
-
-  const content = document.createElement('div')
-  content.style.cssText = `
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #3b82f6;
   `
 
-  flashcards.forEach((flashcard, index) => {
-    const card = document.createElement('div')
-    card.style.cssText = `
-      margin-bottom: 16px;
-      padding: 16px;
-      background: #f9fafb;
-      border-radius: 8px;
-      border-left: 4px solid #667eea;
-    `
-
-    const question = document.createElement('h3')
-    question.style.cssText = 'margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1f2937;'
-    question.textContent = flashcard.question
-
-    const answer = document.createElement('p')
-    answer.style.cssText = 'margin: 0; font-size: 14px; color: #6b7280;'
-    answer.textContent = flashcard.answer
-
-    const tags = document.createElement('div')
-    tags.style.cssText = 'margin-top: 12px; display: flex; gap: 8px;'
-    flashcard.tags.forEach(tag => {
-      const tagEl = document.createElement('span')
-      tagEl.style.cssText = `
-        padding: 4px 8px;
-        background: #e5e7eb;
-        border-radius: 4px;
-        font-size: 12px;
-        color: #6b7280;
-      `
-      tagEl.textContent = tag
-      tags.appendChild(tagEl)
-    })
-
-    card.appendChild(question)
-    card.appendChild(answer)
-    card.appendChild(tags)
-    content.appendChild(card)
-  })
-
-  const footer = document.createElement('div')
-  footer.style.cssText = `
-    padding: 16px 20px;
-    background: #f9fafb;
-    border-top: 1px solid #e5e7eb;
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-  `
+  const title = document.createElement('h2')
+  title.textContent = 'Flashcards'
+  title.style.cssText = 'font-size: 2rem; color: white; margin: 0;'
 
   const closeButton = document.createElement('button')
-  closeButton.id = 'close-ui-btn'
+  closeButton.textContent = '✕'
   closeButton.style.cssText = `
-    padding: 10px 24px;
     background: #ef4444;
     color: white;
     border: none;
-    border-radius: 6px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 1.5rem;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
   `
-  closeButton.textContent = 'Close'
+  closeButton.onclick = () => overlay.remove()
 
-  const downloadButton = document.createElement('button')
-  downloadButton.style.cssText = `
-    padding: 10px 24px;
-    background: #667eea;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-  `
-  downloadButton.textContent = 'Download as CSV'
-
-  footer.appendChild(downloadButton)
-  footer.appendChild(closeButton)
-
+  header.appendChild(title)
+  header.appendChild(closeButton)
   container.appendChild(header)
-  container.appendChild(content)
-  container.appendChild(footer)
-  document.body.appendChild(container)
 
-  // Close button handler
-  document.getElementById('close-ui')?.addEventListener('click', () => container.remove())
-  document.getElementById('close-ui-btn')?.addEventListener('click', () => container.remove())
+  // Flashcards list
+  flashcards.forEach((flashcard, index) => {
+    const card = document.createElement('div')
+    card.style.cssText = `
+      background: #1f2937;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      border: 1px solid #374151;
+    `
 
-  // Download button handler
-  downloadButton.addEventListener('click', () => {
-    const csv = generateCSV(flashcards)
-    downloadCSV(csv, 'flashcards.csv')
+    const question = document.createElement('h3')
+    question.textContent = flashcard.question
+    question.style.cssText = 'font-size: 1.25rem; color: #60a5fa; margin-bottom: 12px;'
+
+    const answer = document.createElement('p')
+    answer.textContent = flashcard.answer
+    answer.style.cssText = 'font-size: 1.1rem; color: #e5e7eb;'
+
+    const footer = document.createElement('div')
+    footer.style.cssText = 'margin-top: 16px; display: flex; gap: 8px;'
+
+    const exportButton = document.createElement('button')
+    exportButton.textContent = 'Export CSV'
+    exportButton.style.cssText = `
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    `
+    exportButton.onclick = () => exportFlashcards(flashcard)
+
+    const copyButton = document.createElement('button')
+    copyButton.textContent = 'Copy'
+    copyButton.style.cssText = `
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    `
+    copyButton.onclick = () => {
+      navigator.clipboard.writeText(flashcard.question + '\n\n' + flashcard.answer)
+      copyButton.textContent = 'Copied!'
+      setTimeout(() => copyButton.textContent = 'Copy', 2000)
+    }
+
+    footer.appendChild(exportButton)
+    footer.appendChild(copyButton)
+    card.appendChild(question)
+    card.appendChild(answer)
+    card.appendChild(footer)
+    container.appendChild(card)
+  })
+
+  overlay.appendChild(container)
+  document.body.appendChild(overlay)
+
+  // Send message to background script
+  chrome.runtime.sendMessage({
+    type: 'generate-flashcards',
+    data: {
+      url: window.location.href,
+      title: extractTitle()
+    }
   })
 }
 
-function generateCSV(flashcards: Flashcard[]): string {
-  const headers = ['Question', 'Answer', 'Difficulty', 'Tags']
-  const rows = flashcards.map(card => [
-    `"${card.question.replace(/"/g, '""')}"`,
-    `"${card.answer.replace(/"/g, '""')}"`,
-    card.difficulty,
-    `"${card.tags.join(', ')}"`
-  ])
+// Export flashcards to CSV
+function exportFlashcards(flashcard: Flashcard): void {
+  const csvContent = `Question,Answer,Type,Difficulty,Tags\n` +
+    `"${flashcard.question.replace(/"/g, '""')}","${flashcard.answer.replace(/"/g, '""')}",${flashcard.type},${flashcard.difficulty},"${flashcard.tags.join(', ')}"`
 
-  return [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+
+  link.setAttribute('href', url)
+  link.setAttribute('download', `${flashcard.sourceTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_flashcards.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
-function downloadCSV(csv: string, filename: string) {
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  window.URL.revokeObjectURL(url)
-}
-
-// Main execution
-async function main() {
-  try {
-    // Wait for content to load
-    const hasContent = await waitForContent()
-    if (!hasContent) {
-      console.log('No article content detected')
-      return
-    }
-
-    // Extract article content
-    const article = extractArticleContent()
-
-    // Get API key
-    const result = await new Promise<{ openrouter_api_key: string }>((resolve) => {
-      chrome.runtime.sendMessage({ action: 'GET_API_KEYS' }, (response) => {
-        resolve(response || { openrouter_api_key: '' })
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'create-overlay') {
+    generateFlashcards()
+      .then(flashcards => {
+        createOverlay(flashcards)
+        sendResponse({ success: true })
       })
-    })
-
-    if (!result.openrouter_api_key) {
-      // No API key - show error message
-      const existingError = document.getElementById('flashcards-error')
-      if (!existingError) {
-        const errorDiv = document.createElement('div')
-        errorDiv.id = 'flashcards-error'
-        errorDiv.style.cssText = `
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 90%;
-          max-width: 500px;
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-          z-index: 2147483647;
-          padding: 24px;
-        `
-        errorDiv.innerHTML = `
-          <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 600; color: #1f2937;">⚠️ No API Key</h2>
-          <p style="margin: 0 0 20px 0; color: #6b7280;">Please set your OpenRouter API key in the extension settings.</p>
-          <button id="open-settings" style="
-            padding: 12px 24px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-          ">Open Settings</button>
-        `
-        document.body.appendChild(errorDiv)
-
-        document.getElementById('open-settings')?.addEventListener('click', () => {
-          chrome.runtime.openOptionsPage()
-          errorDiv.remove()
-        })
-      }
-      return
-    }
-
-    // Generate flashcards
-    const flashcards = await generateFlashcards(article, result.openrouter_api_key)
-
-    // Save flashcards
-    for (const flashcard of flashcards) {
-      flashcard.id = crypto.randomUUID()
-      flashcard.sourceUrl = article.url
-      flashcard.sourceTitle = article.title
-      flashcard.createdAt = new Date().toISOString()
-      flashcard.schedule = calculateSchedule(5) // Default difficulty 5
-
-      chrome.runtime.sendMessage({ action: 'SAVE_FLASHCARD', flashcard }, (response) => {
-        if (response?.error) {
-          console.error('Failed to save flashcard:', response.error)
-        }
+      .catch(error => {
+        sendResponse({ success: false, error: error.message })
       })
-    }
-
-    // Show UI
-    showUI(flashcards)
-
-  } catch (error) {
-    console.error('Error in content script:', error)
+    return true // Keep message channel open
   }
-}
+})
 
-// Calculate schedule using SM-2 algorithm
-function calculateSchedule(difficulty: number): {
-  nextReview: string
-  interval: number
-  repetition: number
-  easeFactor: number
-} {
-  const easinessFactor = 2.5
-  const interval = 1
-  const repetition = 0
-
-  return {
-    nextReview: new Date(Date.now() + interval * 24 * 60 * 60 * 1000).toISOString(),
-    interval,
-    repetition,
-    easeFactor
-  }
-}
-
-// Start main function when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', main)
-} else {
-  main()
-}
+// Initialize
+waitForContent(10000)
+  .then(() => {
+    console.log('Content loaded, ready to generate flashcards')
+  })
+  .catch(error => {
+    console.error('Error waiting for content:', error)
+  })

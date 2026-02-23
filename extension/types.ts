@@ -23,3 +23,15 @@ export interface ReviewCard {
   quality: number // 0-5: 0-1=Forgot, 2-3=Hard, 4-5=Good
   nextReviewDate: string
 }
+
+export interface Message {
+  type: 'generate-flashcards' | 'export-flashcards' | 'add-flashcard' | 'get-storage'
+  data?: any
+  callback?: (response: any) => void
+}
+
+export interface StorageData {
+  flashcards: Flashcard[]
+  apiKey?: string
+  exportFormat?: 'csv' | 'json'
+}
