@@ -4,7 +4,7 @@
   "description": "Convert any webpage into flashcards automatically",
   "type": "module",
   "scripts": {
-    "build": "tsc && node -e \"const fs=require('fs');fs.copyFileSync('manifest.json','dist/manifest.json');fs.mkdirSync('dist/icons',{recursive:true});fs.readdirSync('icons').forEach(f=>fs.copyFileSync('icons/'+f,'dist/icons/'+f))\"",
+    "build": "tsc && node -e \"const fs=require('fs');['manifest.json','options.html','popup.html','content-ui.html'].forEach(f=>fs.copyFileSync(f,'dist/'+f));fs.mkdirSync('dist/icons',{recursive:true});fs.readdirSync('icons').forEach(f=>fs.copyFileSync('icons/'+f,'dist/icons/'+f))\"",
     "watch": "tsc --watch",
     "clean": "rm -rf dist"
   },

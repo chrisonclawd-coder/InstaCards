@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Article-to-Flashcards</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f9fafb;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #1f2937;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .helper-text {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+      margin-top: 8px;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .success {
+      color: #10b981;
+      font-size: 14px;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .error {
+      color: #ef4444;
+      font-size: 14px;
+      margin-top: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚙️ Settings</h1>
+
+    <div class="section">
+      <div class="section-title">API Keys</div>
+
+      <div class="form-group">
+        <label for="openrouter-api-key">OpenRouter API Key</label>
+        <input
+          type="password"
+          id="openrouter-api-key"
+          placeholder="sk-or-v1-..."
+        >
+        <p class="helper-text">
+          Get your API key from <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai</a>
+        </p>
+        <p class="helper-text">
+          This key is stored locally and never sent anywhere except OpenRouter API.
+        </p>
+      </div>
+
+      <button class="btn btn-primary" id="save-openrouter">Save OpenRouter Key</button>
+      <div class="success" id="openrouter-success">✅ OpenRouter API key saved!</div>
+      <div class="error" id="openrouter-error">❌ Error saving API key</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Data Management</div>
+
+      <button class="btn btn-danger" id="clear-data">Clear All Flashcards</button>
+      <p class="helper-text">Warning: This will permanently delete all flashcards.</p>
+      <div class="success" id="clear-success">✅ All flashcards cleared!</div>
+      <div class="error" id="clear-error">❌ Error clearing flashcards</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">About</div>
+
+      <p class="helper-text" style="line-height: 1.6;">
+        Article-to-Flashcards converts any webpage into flashcards automatically.<br><br>
+        • Smart content extraction with AI<br>
+        • Multiple export formats (Anki, Quizlet, CSV)<br>
+        • Spaced repetition algorithm<br>
+        • Offline mode support<br><br>
+        <strong>Version: 1.0.0</strong>
+      </p>
+    </div>
+  </div>
+
+  <script type="module" src="options.ts"></script>
+</body>
+</html>
