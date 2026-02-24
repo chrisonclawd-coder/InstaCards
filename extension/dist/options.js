@@ -63,4 +63,3 @@ document.getElementById('clear-data').addEventListener('click', async () => {
         document.getElementById('clear-error').style.display = 'block';
     }
 });
-//# sourceMappingURL=options.js.map

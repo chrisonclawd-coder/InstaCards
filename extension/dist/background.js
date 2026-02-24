@@ -1,152 +1,145 @@
 // IndexedDB Helper Functions
 class Database {
-    dbName = 'article-flashcards';
-    storeName = 'flashcards';
-    async open() {
+    constructor() {
+        this.dbName = 'article-flashcards';
+    }
+    async init() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(this.dbName, 1);
             request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
+            request.onsuccess = () => resolve();
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    const objectStore = db.createObjectStore(this.storeName, { keyPath: 'id' });
-                    objectStore.createIndex('nextReview', 'schedule.nextReview', { unique: false });
+                if (!db.objectStoreNames.contains('flashcards')) {
+                    db.createObjectStore('flashcards', { keyPath: 'id' });
                 }
             };
         });
     }
-    async getAll() {
-        const db = await this.open();
+    async addFlashcard(flashcard) {
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readonly');
-            const objectStore = transaction.objectStore(this.storeName);
-            const request = objectStore.getAll();
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
+            const request = indexedDB.open(this.dbName, 1);
+            request.onsuccess = () => {
+                const db = request.result;
+                const transaction = db.transaction('flashcards', 'readwrite');
+                const store = transaction.objectStore('flashcards');
+                store.put(flashcard);
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error);
+            };
         });
     }
-    async save(flashcard) {
-        const db = await this.open();
+    async getAllFlashcards() {
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const objectStore = transaction.objectStore(this.storeName);
-            const request = objectStore.put(flashcard);
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve();
-        });
-    }
-    async delete(id) {
-        const db = await this.open();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const objectStore = transaction.objectStore(this.storeName);
-            const request = objectStore.delete(id);
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve();
-        });
-    }
-    async clear() {
-        const db = await this.open();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const objectStore = transaction.objectStore(this.storeName);
-            const request = objectStore.clear();
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve();
+            const request = indexedDB.open(this.dbName, 1);
+            request.onsuccess = () => {
+                const db = request.result;
+                const transaction = db.transaction('flashcards', 'readonly');
+                const store = transaction.objectStore('flashcards');
+                const request2 = store.getAll();
+                request2.onsuccess = () => resolve(request2.result);
+                request2.onerror = () => reject(request2.error);
+            };
         });
     }
 }
 const db = new Database();
-// Message Handlers
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'GET_FLASHCARDS') {
-        db.getAll().then(flashcards => {
-            // Sort by next review date
-            flashcards.sort((a, b) => new Date(a.schedule.nextReview).getTime() - new Date(b.schedule.nextReview).getTime());
-            sendResponse({ flashcards });
-        }).catch(error => {
-            sendResponse({ error: error.message });
-        });
-        return true;
-    }
-    if (message.action === 'SAVE_FLASHCARD') {
-        db.save(message.flashcard).then(() => {
-            sendResponse({ success: true });
-        }).catch(error => {
-            sendResponse({ error: error.message });
-        });
-        return true;
-    }
-    if (message.action === 'DELETE_FLASHCARD') {
-        db.delete(message.id).then(() => {
-            sendResponse({ success: true });
-        }).catch(error => {
-            sendResponse({ error: error.message });
-        });
-        return true;
-    }
-    if (message.action === 'CLEAR_FLASHCARDS') {
-        db.clear().then(() => {
-            sendResponse({ success: true });
-        }).catch(error => {
-            sendResponse({ error: error.message });
-        });
-        return true;
-    }
-    if (message.action === 'GET_API_KEYS') {
-        chrome.storage.local.get(['openrouter_api_key', 'exa_api_key'], (result) => {
-            sendResponse({
-                openrouter_api_key: result.openrouter_api_key,
-                exa_api_key: result.exa_api_key
-            });
-        });
-        return true;
-    }
-    if (message.action === 'SAVE_API_KEYS') {
-        chrome.storage.local.set({
-            openrouter_api_key: message.openrouter_api_key,
-            exa_api_key: message.exa_api_key
-        }, () => {
-            sendResponse({ success: true });
-        });
-        return true;
-    }
+// Initialize database on service worker install
+chrome.runtime.onInstalled.addListener(async () => {
+    await db.init();
 });
-// Check for review queue
-chrome.alarms.create('check-reviews', {
-    periodInMinutes: 60,
-    when: Date.now() + 60000
+chrome.runtime.onMessage.addListener((message) => {
+    // Handle different message types
+    if (message.type === 'generate-flashcards') {
+        generateFlashcards(message.data);
+    }
+    else if (message.type === 'export-flashcards') {
+        exportFlashcards(message.data.format || 'csv', message.data.sendResponse);
+    }
+    else if (message.type === 'get-storage') {
+        getStorage(message.data.sendResponse);
+    }
+    // Keep message channel open for async responses
+    return true;
 });
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === 'check-reviews') {
-        const flashcards = await db.getAll();
-        const now = new Date();
-        const reviewQueue = flashcards.filter(card => {
-            return new Date(card.schedule.nextReview) <= now;
-        });
-        if (reviewQueue.length > 0) {
-            chrome.notifications.create('flashcard-review', {
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: 'Time for Flashcard Review',
-                message: `You have ${reviewQueue.length} flashcards to review`,
-                priority: 2
-            });
+async function generateFlashcards(data) {
+    try {
+        const { url, apiKey } = data;
+        if (!apiKey) {
+            sendError('API key is required');
+            return;
+        }
+        // Get page title
+        const title = document.title;
+        // Generate flashcards (placeholder - replace with actual AI generation)
+        const flashcards = [
+            {
+                id: Date.now().toString(),
+                question: 'What is the main topic of this page?',
+                answer: data.topic || 'Based on the URL content',
+                type: 'qa',
+                difficulty: 3,
+                tags: ['General'],
+                sourceUrl: url,
+                sourceTitle: title,
+                createdAt: new Date().toISOString(),
+                schedule: {
+                    nextReview: new Date(Date.now() + 86400000).toISOString(),
+                    interval: 1,
+                    repetition: 0,
+                    easeFactor: 2.5
+                }
+            }
+        ];
+        // Save to IndexedDB
+        for (const flashcard of flashcards) {
+            await db.addFlashcard(flashcard);
+        }
+        sendSuccess({ flashcards });
+    }
+    catch (error) {
+        sendError(error instanceof Error ? error.message : 'Unknown error');
+    }
+}
+async function exportFlashcards(format, sendResponse) {
+    try {
+        const flashcards = await db.getAllFlashcards();
+        if (format === 'csv') {
+            const csv = flashcardsToCSV(flashcards);
+            sendSuccess({ csv, format: 'text/csv' });
+        }
+        else {
+            sendSuccess({ json: flashcards, format: 'application/json' });
         }
     }
-});
-// Listen for tab updates to inject content script
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url) {
-        // Inject content script if needed
-        chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['content.ts']
-        }).catch(err => {
-            console.error('Failed to inject content script:', err);
-        });
+    catch (error) {
+        sendError(error instanceof Error ? error.message : 'Unknown error');
     }
-});
+}
+async function getStorage(sendResponse) {
+    try {
+        const flashcards = await db.getAllFlashcards();
+        sendSuccess({ flashcards, apiKey: 'stored', exportFormat: 'csv' });
+    }
+    catch (error) {
+        sendError(error instanceof Error ? error.message : 'Unknown error');
+    }
+}
+function flashcardsToCSV(flashcards) {
+    const headers = ['Question', 'Answer', 'Type', 'Difficulty', 'Tags'];
+    const rows = flashcards.map(f => [
+        `"${f.question.replace(/"/g, '""')}"`,
+        `"${f.answer.replace(/"/g, '""')}"`,
+        f.type,
+        f.difficulty.toString(),
+        `"${f.tags.join(', ')}"`
+    ]);
+    return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+}
+function sendSuccess(data) {
+    chrome.runtime.sendMessage({ type: 'response', success: true, data });
+}
+function sendError(error) {
+    chrome.runtime.sendMessage({ type: 'response', success: false, error });
+}
 export {};
-//# sourceMappingURL=background.js.map
