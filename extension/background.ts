@@ -56,14 +56,14 @@ chrome.runtime.onInstalled.addListener(async () => {
   await db.init()
 })
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message) => {
   // Handle different message types
   if (message.type === 'generate-flashcards') {
     generateFlashcards(message.data)
   } else if (message.type === 'export-flashcards') {
-    exportFlashcards(message.data, sendResponse)
+    exportFlashcards(message.data.format || 'csv', message.data.sendResponse)
   } else if (message.type === 'get-storage') {
-    getStorage(sendResponse)
+    getStorage(message.data.sendResponse)
   }
 
   // Keep message channel open for async responses
@@ -108,12 +108,12 @@ async function generateFlashcards(data: any) {
     }
 
     sendSuccess({ flashcards })
-  } catch (error) {
-    sendError(error.message)
+  } catch (error: unknown) {
+    sendError(error instanceof Error ? error.message : 'Unknown error')
   }
 }
 
-async function exportFlashcards(format: string, sendResponse: (response: any) => void) {
+async function exportFlashcards(format: string, sendResponse: any) {
   try {
     const flashcards = await db.getAllFlashcards()
 
@@ -123,17 +123,17 @@ async function exportFlashcards(format: string, sendResponse: (response: any) =>
     } else {
       sendSuccess({ json: flashcards, format: 'application/json' })
     }
-  } catch (error) {
-    sendError(error.message)
+  } catch (error: unknown) {
+    sendError(error instanceof Error ? error.message : 'Unknown error')
   }
 }
 
-async function getStorage(sendResponse: (response: any) => void) {
+async function getStorage(sendResponse: any) {
   try {
     const flashcards = await db.getAllFlashcards()
     sendSuccess({ flashcards, apiKey: 'stored', exportFormat: 'csv' })
-  } catch (error) {
-    sendError(error.message)
+  } catch (error: unknown) {
+    sendError(error instanceof Error ? error.message : 'Unknown error')
   }
 }
 

@@ -4,7 +4,7 @@
   "description": "Convert any webpage into flashcards automatically",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp manifest.json dist/ && mkdir -p dist/icons && cp -r icons/* dist/icons/",
     "watch": "tsc --watch",
     "clean": "rm -rf dist"
   },
